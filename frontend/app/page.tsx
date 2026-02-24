@@ -1,48 +1,99 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCurrentUser, signOut } from "aws-amplify/auth";
+import CustomAuth from "../components/CustomAuth"; // Adjust path if needed
 import {
   useGetPatientsQuery,
   useAddPatientMutation,
-} from "@/lib/features/apiSlice"; // Adjust path if needed
+} from "@/lib/features/apiSlice";
 
 export default function Home() {
-  // 1. Fetching Hook
-  const { data: patients, isLoading, isError, error } = useGetPatientsQuery({});
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [username, setUsername] = useState("");
 
-  // 2. Mutation Hook
+  // RTK Query Hooks
+  const {
+    data: patients,
+    isLoading,
+    isError,
+    error,
+  } = useGetPatientsQuery({}, { skip: !isAuthenticated });
   const [addPatient, { isLoading: isAdding }] = useAddPatientMutation();
 
-  // 3. Form State
+  // Form State
   const [idLabel, setIdLabel] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-  // 4. Submit Handler
+  // Check auth status on load
+  useEffect(() => {
+    checkUser();
+  }, []);
+
+  const checkUser = async () => {
+    try {
+      const user = await getCurrentUser();
+      setUsername(user.username);
+      setIsAuthenticated(true);
+    } catch (err) {
+      setIsAuthenticated(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsAuthenticated(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // The .unwrap() lets us catch errors cleanly if the backend rejects the request
       await addPatient({
         idLabel,
         name,
         email,
-        dob: "1990-01-01", // Hardcoded for this quick test
+        dob: "1990-01-01",
         sexe: "M",
       }).unwrap();
-
-      // Clear the form after a successful save
       setIdLabel("");
       setName("");
       setEmail("");
     } catch (err) {
       console.error("Failed to save the patient: ", err);
-      alert("Failed to add patient. Check the console for CORS or 401 errors.");
+      alert("Failed to add patient. Check console.");
     }
   };
 
+  // Show a blank screen (or a spinner) while checking initial auth status to avoid flashing
+  if (isAuthenticated === null) {
+    return <div className="min-h-screen bg-zinc-50 dark:bg-black"></div>;
+  }
+
+  // Render your custom login screen if not authenticated
+  if (!isAuthenticated) {
+    return <CustomAuth onAuthSuccess={() => checkUser()} />;
+  }
+
+  // --- RENDER DASHBOARD IF AUTHENTICATED ---
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-50 p-8 dark:bg-black font-sans">
+      {/* Header Bar */}
+      <div className="w-full max-w-3xl flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800">
+        <p className="text-zinc-600 dark:text-zinc-300">
+          Logged in user:{" "}
+          <span className="font-bold text-black dark:text-white">
+            {username}
+          </span>
+        </p>
+        <button
+          onClick={handleSignOut}
+          className="rounded-md border border-red-500 text-red-500 px-4 py-2 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+        >
+          Sign Out
+        </button>
+      </div>
+
       {/* --- ADD PATIENT FORM --- */}
       <div className="w-full max-w-3xl rounded-xl bg-white p-8 shadow-md dark:bg-zinc-900 mb-8 border border-zinc-200 dark:border-zinc-800">
         <h2 className="mb-4 text-2xl font-bold text-black dark:text-white">
